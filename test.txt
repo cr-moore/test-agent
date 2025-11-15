@@ -1,5 +1,6 @@
-Website - https://newbalance.com
+Website - https://youtube.com
 
-Instructions: 
-blah, blah, blah
-whoop
+Instructions (Write test instructions below): 
+You are on youtube.com website.
+Search for 'lofi music' in the search bar at the top.
+Finally verify search results appear.

@@ -10,7 +10,6 @@ def main():
     
     # get test
     test = read_test_file(TEST_FILE_PATH)
-    print(test)
 
     # run agent loop
     final_agent_message = asyncio.run(test_gen_loop(test['website'], test['instructions']))
