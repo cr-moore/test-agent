@@ -1,4 +1,5 @@
 import shutil
+import os
 from pathlib import Path
 
 from enum import StrEnum
@@ -15,7 +16,8 @@ from anthropic.types import (
     ToolUseBlockParam,
 )
 
-from config.prompt import SYSTEM_PROMPT
+from config.script_prompt import SYSTEM_PROMPT as SCRIPT_PROMPT
+from config.plan_prompt import SYSTEM_PROMPT as PLAN_PROMPT
 from tools.collection import ToolCollection, ToolResult
 from tools.browser import BrowserTool
 from tools.script_writer import ScriptWriterTool
@@ -23,6 +25,10 @@ from tools.script_writer import ScriptWriterTool
 class APIProvider(StrEnum):
     ANTHROPIC = "anthropic"
     BEDROCK = "bedrock"
+
+class PromptType(StrEnum):
+    PLAN = "plan"
+    SCRIPT = "script"
 
 PROVIDER_TO_DEFAULT_MODEL_NAME: dict[APIProvider, str] = {
     APIProvider.ANTHROPIC: "claude-sonnet-4-5-20250929",
@@ -35,10 +41,17 @@ MODEL = PROVIDER_TO_DEFAULT_MODEL_NAME[PROVIDER]
 async def test_gen_loop(
         website_url: str,
         test_case: str,
+        prompt_type: PromptType = PromptType.SCRIPT,
         max_tokens: int = 4096
-) -> list[MessageParam]:
+) -> str:
     """
     The agent loop that executes the interaction between AI and tool
+    
+    Args:
+        website_url: The URL of the website to test
+        test_case: The test case instructions
+        prompt_type: Either PromptType.PLAN for test plan generation or PromptType.SCRIPT for script generation
+        max_tokens: Maximum tokens for API response
     """
     messages: list[MessageParam] = [{"role": "user", "content": test_case}]
 
@@ -48,12 +61,20 @@ async def test_gen_loop(
     browser_tool = BrowserTool(website_url)
     await browser_tool.start()  # Start it (returns None)
 
-    script_writer = ScriptWriterTool()
+    # Select output directory based on prompt type
+    output_dir = "../plans" if prompt_type == PromptType.PLAN else "../scripts"
+    script_writer = ScriptWriterTool(output_dir=output_dir)
 
     tool_collection = ToolCollection(browser_tool, script_writer)
-    system_prompt = TextBlockParam(type="text", text=SYSTEM_PROMPT)
+    
+    # Select the appropriate system prompt based on prompt_type
+    system_prompt_text = PLAN_PROMPT if prompt_type == PromptType.PLAN else SCRIPT_PROMPT
+    system_prompt = TextBlockParam(type="text", text=system_prompt_text)
+    
+    print(f"[Output Directory: {output_dir}]")
+    
     client = Anthropic(
-        api_key=""
+        api_key=os.getenv("ANTHROPIC_API_KEY")
     )
 
     try:
@@ -69,7 +90,7 @@ async def test_gen_loop(
                 )
             except Exception as e:
                 print(f"API call failed: {e}")
-                return messages
+                return ""
 
             response = raw_response.parse()
             print("******* New instructions received *******\n")
@@ -90,7 +111,7 @@ async def test_gen_loop(
 def _response_to_params(
         response: Message
 ) -> list[TextBlockParam | ToolUseBlockParam]:
-    
+    """Convert API response message to list of text and tool use parameters."""
     return [
         {"type": "text", "text": block.text} if isinstance(block, TextBlock)
         else cast(ToolUseBlockParam, block.model_dump())
@@ -101,17 +122,21 @@ def _response_to_params(
 async def _process_tool_use(
         tool_collection: ToolCollection,
         response_params: list[TextBlockParam | ToolUseBlockParam]
-) -> list[ToolResultBlockParam]:
+) -> tuple[list[ToolResultBlockParam], str]:
+    """Process tool use blocks and text blocks from API response, executing tools and collecting results."""
     tool_result_content = []
     final_agent_message = ''
     for block in response_params:
-        print(f'{block}\n')
         if block["type"] == "tool_use":
+            print(f'\n[Tool Use: {block["name"]}]')
+            print(f'Input: {block["input"]}\n')
             result = await tool_collection.run(
                 name=block["name"],
                 tool_input=cast(dict[str, Any], block["input"]),
             )
             tool_result_content.append(_make_api_tool_result(result, block["id"]))
+        elif block["type"] == "text":
+            print(f'{block["text"]}\n')
 
     if not tool_result_content:
         final_agent_message = response_params[0]['text']
@@ -160,6 +185,7 @@ def _maybe_prepend_system_tool_result(result: ToolResult, result_text: str) -> s
     return result_text
 
 def _clear_screenshots():
+    """Clear all PNG screenshot files from the screenshots directory."""
     screenshot_dir = Path("../screenshots")
     screenshot_dir.mkdir(parents=True, exist_ok=True)
     

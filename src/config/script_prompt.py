@@ -23,5 +23,6 @@ SYSTEM_PROMPT = f"""<SYSTEM_CAPABILITY>
 <IMPORTANT>
 * Minimize redundant screenshots - only take them when necessary to verify state changes
 * Focus on executing the test efficiently
+* Do NOT include any actions that failed in the script
 * Your final message must be ONLY one word: 'Success' or 'Fail'
 </IMPORTANT>"""

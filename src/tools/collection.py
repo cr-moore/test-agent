@@ -4,8 +4,10 @@ from .base import BaseAnthropicTool, ToolError, ToolFailure, ToolResult
 
 
 class ToolCollection:
+    """Container and executor for a collection of tools."""
 
     def __init__(self, *tools: BaseAnthropicTool):
+        """Initialize tool collection with provided tools."""
 
         self.tools = tools
 
@@ -15,9 +17,11 @@ class ToolCollection:
             raise ValueError("Duplicate tool names found in the provided tools.")
 
     def to_params(self) -> List[ToolUnionParam]:
+        """Convert all tools to their parameter representations."""
         return [tool.to_params() for tool in self.tools]
 
     async def run(self, *, name: str, tool_input: Dict[str, Any]) -> ToolResult:
+        """Execute a tool by name with the provided input."""
 
         tool = self.tool_map.get(name)
         if not tool:

@@ -16,6 +16,10 @@ screenshots/*.png
 scripts/*.py
 !scripts/.gitkeep
 
+# Plans output
+plans/*.txt
+!plans/.gitkeep
+
 # IDE
 .vscode/
 .idea/
